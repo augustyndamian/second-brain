@@ -5,6 +5,7 @@ import { useAreas } from "./areas-context";
 import { AreaView } from "./views/AreaView";
 import { TodayView } from "./views/TodayView";
 import { TrackerView } from "./views/TrackerView";
+import { GraphView } from "./views/GraphView";
 
 type Tab = "boards" | "recurring";
 
@@ -31,7 +32,7 @@ export function App() {
 
   // An area can disappear (kb area remove) while its screen is open — fall back to Today.
   useEffect(() => {
-    if (!loaded || screen === "today" || screen === "tracker") return;
+    if (!loaded || screen === "today" || screen === "tracker" || screen === "graph") return;
     if (!areas.some((a) => a.id === screen)) setScreen("today");
   }, [areas, loaded, screen]);
 
@@ -46,6 +47,10 @@ export function App() {
         )}
 
         {screen === "tracker" && <TrackerView key={`tracker-${reloadKey}`} />}
+
+        {/* No reloadKey: GraphView refreshes itself via onGraphChanged — a remount
+            would reload the iframe and lose the user's pan/zoom. */}
+        {screen === "graph" && <GraphView />}
 
         {isArea && (
           <>

@@ -165,7 +165,11 @@ declare global {
       tracking: TrackingApi;
       openObsidian: (ref: string) => Promise<void>;
       openExternal: (url: string) => Promise<void>;
+      graph: {
+        read: () => Promise<{ html: string | null }>;
+      };
       onStorageChanged: (cb: (info: { eventType: string; filePath: string }) => void) => () => void;
+      onGraphChanged: (cb: () => void) => () => void;
     };
   }
 }

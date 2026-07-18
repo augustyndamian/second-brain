@@ -1,6 +1,6 @@
 import { useAreas } from "../areas-context";
 
-/** "today" and "tracker" are reserved; any other value is an area id. */
+/** "today", "tracker" and "graph" are reserved; any other value is an area id. */
 export type Screen = string;
 
 export function Sidebar({
@@ -26,6 +26,10 @@ export function Sidebar({
         <NavItem active={screen === "tracker"} onClick={() => onSelect("tracker")}>
           <span>🎯</span>
           <span>Tracker</span>
+        </NavItem>
+        <NavItem active={screen === "graph"} onClick={() => onSelect("graph")}>
+          <span>🕸️</span>
+          <span>Graph</span>
         </NavItem>
         <div className="mx-4 my-2 border-t border-slate-800" />
         {areas.map((a) => (
