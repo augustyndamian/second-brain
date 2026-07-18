@@ -78,6 +78,16 @@ const api = {
   openObsidian: (ref: string) => ipcRenderer.invoke("openObsidian", ref),
   openExternal: (url: string) => ipcRenderer.invoke("openExternal", url),
 
+  graph: {
+    read: (): Promise<{ html: string | null }> => ipcRenderer.invoke("graph:read"),
+  },
+
+  onGraphChanged: (cb: () => void) => {
+    const listener = () => cb();
+    ipcRenderer.on("graph:changed", listener);
+    return () => ipcRenderer.removeListener("graph:changed", listener);
+  },
+
   onStorageChanged: (cb: (info: { eventType: string; filePath: string }) => void) => {
     const listener = (_e: any, info: any) => cb(info);
     ipcRenderer.on("storage:changed", listener);

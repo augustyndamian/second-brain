@@ -12,6 +12,7 @@ if (!process.env.TZ) {
 }
 
 import { app, BrowserWindow, dialog, ipcMain, shell } from "electron";
+import * as fs from "node:fs/promises";
 import * as path from "node:path";
 import {
   createBoard,
@@ -55,7 +56,7 @@ import {
   writeDailyNote,
   listAreas,
 } from "@second-brain/core";
-import { startWatcher } from "./watcher";
+import { startGraphWatcher, startWatcher } from "./watcher";
 
 // Resolution can fail (no workspace anywhere) — surface it as a dialog once the app
 // is ready rather than crashing before a window ever appears.
@@ -170,6 +171,16 @@ function registerIpc() {
   });
 
   ipcMain.handle("areas:list", async () => listAreas(ROOT));
+
+  // graph.html lives in the workspace dir (dirname of the .kanban root), written by /graphify.
+  ipcMain.handle("graph:read", async (): Promise<{ html: string | null }> => {
+    const file = path.join(path.dirname(ROOT), "graphify-out", "graph.html");
+    try {
+      return { html: await fs.readFile(file, "utf8") };
+    } catch {
+      return { html: null }; // missing or mid-rewrite — renderer keeps its last good copy
+    }
+  });
 }
 
 app.whenReady().then(async () => {
@@ -193,6 +204,12 @@ app.whenReady().then(async () => {
   startWatcher(paths(ROOT).root, (eventType, filePath) => {
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send("storage:changed", { eventType, filePath });
+    }
+  });
+
+  startGraphWatcher(path.dirname(ROOT), () => {
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send("graph:changed");
     }
   });
 
