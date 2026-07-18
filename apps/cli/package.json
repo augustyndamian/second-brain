@@ -1,0 +1,23 @@
+{
+  "name": "@second-brain/cli",
+  "version": "0.0.2",
+  "type": "module",
+  "bin": {
+    "kb": "./src/index.ts"
+  },
+  "scripts": {
+    "dev": "bun run src/index.ts",
+    "build": "bun build --compile --target=bun-darwin-arm64 --outfile=dist/kb src/index.ts",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@second-brain/core": "workspace:*",
+    "commander": "^12.1.0"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.0",
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.8"
+  }
+}

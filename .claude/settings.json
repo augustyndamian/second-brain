@@ -1,0 +1,45 @@
+{
+  "permissions": {
+    "allow": [
+      "Read",
+      "Write",
+      "Edit",
+      "Grep",
+      "Glob",
+      "Bash(date:*)",
+      "Bash(ls:*)",
+      "Bash(mkdir -p *)",
+      "Bash(kb:*)",
+      "Bash(export PATH=\"$HOME/.local/bin:$PATH\"; kb *)",
+      "Bash(~/.local/bin/kb *)",
+      "Bash(KB_DEV=1 kb *)",
+      "Bash(KB_KANBAN_ROOT=* kb *)",
+      "Bash(tail *.kanban/events.jsonl*)",
+      "Bash(tail *.kanban/recurring-stats.jsonl*)",
+      "Bash(tail *.kanban-dev/events.jsonl*)",
+      "Bash(graphify:*)",
+      "Bash(python3 -c *)",
+      "Bash(pnpm build:*)",
+      "Bash(pnpm typecheck*)",
+      "Bash(pnpm test*)",
+      "Bash(pnpm install:local)"
+    ],
+    "deny": [
+      "Bash(rm:*)",
+      "Bash(sudo:*)",
+      "Bash(cat */.local/bin/*)",
+      "Bash(head */.local/bin/*)",
+      "Bash(file */.local/bin/*)",
+      "Bash(strings:*)",
+      "Bash(xxd:*)",
+      "Bash(hexdump:*)",
+      "Bash(od:*)",
+      "Read(.env)",
+      "Read(.env.*)",
+      "Edit(.env)",
+      "Edit(.env.*)",
+      "Write(.env)",
+      "Write(.env.*)"
+    ]
+  }
+}

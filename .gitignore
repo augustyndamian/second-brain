@@ -1,0 +1,26 @@
+# ── build artifacts ──────────────────────────────────────────────────────────
+node_modules
+dist
+.vite
+coverage
+*.log
+.DS_Store
+apps/gui/dist
+apps/gui/dist-electron
+apps/gui/release
+apps/gui/release-stage
+.claude/settings.local.json
+
+# ── personal data ────────────────────────────────────────────────────────────
+# Everything below is YOUR workspace content, not the template.
+# Delete this block to version your workspace in a PRIVATE fork.
+.kanban/*
+!.kanban/.gitkeep
+.kanban-dev/
+journal/*
+!journal/.gitkeep
+areas/
+_memory/
+MASTER-BIO.md
+graphify-out/
+.obsidian/
