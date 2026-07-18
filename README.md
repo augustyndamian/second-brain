@@ -17,6 +17,77 @@ The loop: `/today-morning` plans the day → you work → `/today-eod` closes it
 
 ---
 
+## Features
+
+### Task management (`kb` CLI)
+
+- **Tasks** per area with two date dimensions: `dueDate` (the deadline, drives overdue) and `plannedDate` (when you intend to do it, drives the day view and carry-over).
+- **Canonical reschedule** — `kb task reschedule` moves a task between days in one atomic step: sets the planned date, de-anchors it from Today, emits an event and leaves an audit trail in the scratchpad.
+- **Recurring rules** — daily, weekdays, specific days, every N days, or a day of the month; done/skip/reschedule/toggle per occurrence.
+- **Sessions** — a day anchor (`promote-today` / `close`) so "Today" is an explicit snapshot, not just a date; sessions left open >72h are auto-closed.
+- **Tracker** — what *other people* owe you: commitments, events and external deadlines, grouped into overdue / this week / later.
+- **Daily-notes scratchpad** — quick capture during the day (`kb notes add`), plus an auto-log the core appends on reschedules, tracker changes and skips. `/today-eod` turns each entry into an action and archives it.
+- **Day view** — a read-only view of any past or future day (planned tasks, deadlines, recurring).
+- **Batch operations** — atomic multi-task adds; everything has a `--json` mode for Claude Code.
+- Storage is plain **YAML + an append-only JSONL event log** in `.kanban/` — no database, no cloud, diffable and greppable.
+
+### Standalone macOS app
+
+`pnpm install:local` builds **Second Brain.app** (Electron + React + Tailwind) into `/Applications` — a Dock-launchable GUI over the same storage:
+
+- **Today** — date picker over any day, with Tasks / Recurring / Notes sub-tabs; past and future days render as read-only snapshots.
+- **Tracker** — the commitments view.
+- **A kanban board per area** — 3 columns (todo/doing/done) with drag-drop, plus a Recurring sub-tab; the sidebar, colors and emoji are generated from `areas.yaml`.
+- **Graph** — renders the `/graphify` knowledge graph of your workspace.
+- **Drag-drop reschedule** — drag a task from Today onto a future day cell in the date picker.
+- **Obsidian deep links** — tasks linked to a planning goal get an "Open in Obsidian" button.
+- **Live reload** — CLI or Claude-made changes appear in the GUI within ~500 ms via a file watcher.
+
+### Slash commands
+
+| Command | What it does |
+|---|---|
+| `/onboard` | First-run interview: life areas, annual goals, routines → scaffolds `areas/`, `journal/`, `_memory/`, `MASTER-BIO.md` and personalizes `CLAUDE.md` |
+| `/today-morning` | Morning briefing: overdue blocker, tracker scan, yesterday carry-over, co-created priorities, one write-once batch, daily note |
+| `/today-eod` | Day close: reschedule unfinished tasks, walk the scratchpad, write the `## Digest`, close the session — no planning for tomorrow |
+| `/weekly-review` | Aggregates 7 days of digests, per-area analysis against planning goals, metrics, observation compression, tracker sweep |
+| `/plan <area>` | Monthly plan per area: retrospective → max 3 goals → one-off + recurring tasks → `planning/YYYY-MM.md` |
+
+### Agents
+
+Three subagents in `.claude/agents/`, each with a narrow contract:
+
+- **kb-ops** — the *single gateway* to the CLI. The main context never runs `kb` directly; kb-ops validates fields, whitelists commands, batches N operations into one call, and returns `ok | error | needs-input | needs-approval`. Every delete requires explicit approval.
+- **reflector** — the compression agent behind `/weekly-review`: reads Active observations across areas and writes a compression *proposal* to `journal/.cache/`; you see the diff and accept before anything is written. It never mutates live files.
+- **scribe** — an append-only writer for large markdown files (>~100 lines): validates the format, appends under the right section, touches nothing else.
+
+### Memory: Observer and Reflector
+
+A two-role memory system (rules in `.claude/rules/memory-system.md`):
+
+- **Observer** (the `observer-save` skill) captures at most 3 observations per session into `areas/{AreaDir}/observations.md`, tagged by source — `[u]` user-stated (never expires), `[t]` tool result, `[c]` Claude-inferred — and by kind: `!` blocker, `?` decision, `+` win, `~` pattern, `i` insight.
+- **Reflector** (the agent above) compresses Active → Archive during `/weekly-review`, generation by generation (G0 raw → G1 weekly → G2 monthly). `[u]` facts are never deleted; `[c]` inferences are dropped first.
+- Permanent facts land in `_memory/` — `user-profile.md`, `rules.md` (your feedback on how Claude should work), and `linking-rules.md` (the entity registry that makes wikilinks deterministic).
+
+### Journal + Obsidian layer
+
+- The workspace **is an Obsidian vault**: every note the commands write has YAML frontmatter, `← [[prev]] | [[next]] →` navigation, and wikilinks to area hubs and registered entities.
+- **Digest-first reading** — later sessions read only a note's `## Digest`, so context cost stays flat no matter how long your notes get.
+- **Aggregation upward** — daily digests → `journal/weekly-reviews/` → `journal/monthly-reviews/`.
+- [`templates-obsidian/`](templates-obsidian/) ships fill-in templates for days you journal by hand.
+
+### Semantic graph (`/graphify`, optional)
+
+Builds a searchable knowledge graph of the workspace (nodes, edges, community detection) into `graphify-out/`: an interactive `graph.html` (also rendered in the app's Graph tab), a GraphRAG-ready `graph.json`, and a `GRAPH_REPORT.md`. `/weekly-review` updates it incrementally and mines it for cross-area connections; `graphify query "<question>"` answers ad-hoc questions.
+
+### Safety
+
+- `.claude/settings.json` allows only `kb` and a few audit commands; `rm`, `sudo` and `.env` access are denied.
+- Deletes always stop for approval; mutations are batched write-once per session.
+- Everything personal is gitignored by default — see "Versioning your data" below.
+
+---
+
 ## Setup
 
 Four steps, about fifteen minutes. Run every command from the repository root.
