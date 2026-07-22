@@ -115,7 +115,7 @@ describe("v2 -> v3 migration", () => {
     await runMigrations(root);
 
     const meta = await readMeta(root);
-    expect(meta.schemaVersion).toBe(3);
+    expect(meta.schemaVersion).toBe(4);
     expect(meta.taskCounters).toEqual({ alpha: 7, sidequests: 2 });
     expect(meta.nextRuleId).toBe(4);
     expect(meta.nextTrackingId).toBe(5);

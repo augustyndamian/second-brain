@@ -4,7 +4,7 @@ import { SCHEMA_VERSION } from "../types.js";
 import { DEFAULT_AREAS, areasFileExists, writeAreas, type AreaConfig } from "./areas.js";
 import { atomicWrite } from "./atomic.js";
 import { readAllBoards } from "./boards.js";
-import { readMeta, writeMeta } from "./meta.js";
+import { readMeta, reconcileTaskCounters, writeMeta } from "./meta.js";
 import { paths } from "./paths.js";
 
 export type Migration = (root: string) => Promise<void>;
@@ -18,6 +18,31 @@ function labelFromId(id: string): string {
     .join(" ");
 }
 
+/**
+ * Folds legacy fixed `nextTaskId<Area>` fields into the `taskCounters` map and
+ * drops them from meta.yaml. Reads raw YAML on purpose: readMeta() parses through
+ * MetaSchema, which strips the very legacy fields this needs to carry over.
+ * On key overlap the larger value wins — never lower a counter.
+ */
+async function foldLegacyTaskCounters(root: string): Promise<void> {
+  const raw = await fs.readFile(paths(root).meta, "utf8").catch(() => null);
+  const legacy = (raw ? YAML.parse(raw) : null) ?? {};
+
+  const taskCounters: Record<string, number> = { ...(legacy.taskCounters ?? {}) };
+  for (const [key, value] of Object.entries(legacy)) {
+    const m = /^nextTaskId([A-Z][A-Za-z]*)$/.exec(key);
+    if (!m?.[1] || typeof value !== "number") continue;
+    const area = m[1].toLowerCase();
+    taskCounters[area] = Math.max(taskCounters[area] ?? 0, value);
+  }
+
+  const next = { ...legacy, taskCounters };
+  for (const key of Object.keys(legacy)) {
+    if (/^nextTaskId([A-Z][A-Za-z]*)$/.test(key)) delete next[key];
+  }
+  await atomicWrite(paths(root).meta, YAML.stringify(next));
+}
+
 const migrations: Record<number, Migration> = {
   // v1 -> v2: introduce Task.plannedDate (defaults to null via Zod schema).
   // No data rewrite needed — readBoard() applies Zod defaults on read,
@@ -29,23 +54,7 @@ const migrations: Record<number, Migration> = {
   // v2 -> v3: fixed per-area counters (nextTaskId<Area>) become the generic
   // `taskCounters` map, and areas move out of the code into areas.yaml.
   2: async (root) => {
-    // Read raw YAML on purpose: readMeta() parses through MetaSchema, which strips
-    // the very legacy fields this migration needs to carry over.
-    const raw = await fs.readFile(paths(root).meta, "utf8").catch(() => null);
-    const legacy = (raw ? YAML.parse(raw) : null) ?? {};
-
-    const taskCounters: Record<string, number> = { ...(legacy.taskCounters ?? {}) };
-    for (const [key, value] of Object.entries(legacy)) {
-      const m = /^nextTaskId([A-Z][A-Za-z]*)$/.exec(key);
-      if (!m?.[1] || typeof value !== "number") continue;
-      taskCounters[m[1].toLowerCase()] = value;
-    }
-
-    const next = { ...legacy, taskCounters };
-    for (const key of Object.keys(legacy)) {
-      if (/^nextTaskId([A-Z][A-Za-z]*)$/.test(key)) delete next[key];
-    }
-    await atomicWrite(paths(root).meta, YAML.stringify(next));
+    await foldLegacyTaskCounters(root);
 
     // Derive areas.yaml from existing boards so pre-v3 storage keeps working.
     if (!(await areasFileExists(root))) {
@@ -58,6 +67,19 @@ const migrations: Record<number, Migration> = {
       }));
       await writeAreas(root, areas.length > 0 ? areas : DEFAULT_AREAS);
     }
+  },
+
+  // v3 -> v4: seed task counters from the boards. Counters were never
+  // reconciled against existing data, so an install whose counters lag its
+  // boards (stale v2 counters carried through 2->3, a meta stamped v3 that
+  // still holds nextTaskId<Area> fields, a meta.yaml restored without its
+  // boards' history) mints duplicate task ids — which the id-keyed update
+  // paths then silently destroy. Fold any stray legacy fields first (they
+  // would otherwise be stripped by MetaSchema), then raise each counter to
+  // max existing id + 1.
+  3: async (root) => {
+    await foldLegacyTaskCounters(root);
+    await reconcileTaskCounters(root);
   },
 };
 
