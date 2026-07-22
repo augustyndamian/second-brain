@@ -54,7 +54,7 @@ describe("initStorage", () => {
   it("meta starts with sane counters", async () => {
     await initStorage(root);
     const meta = await readMeta(root);
-    expect(meta.schemaVersion).toBe(3);
+    expect(meta.schemaVersion).toBe(4);
     expect(meta.nextTaskId).toBe(1);
     expect(meta.nextRuleId).toBe(1);
   });

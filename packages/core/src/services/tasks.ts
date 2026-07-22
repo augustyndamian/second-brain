@@ -537,10 +537,25 @@ function makeBatchId(): string {
   return `b_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
 }
 
-/** Build a taskId→Board map from a pre-fetched boards array (no extra IO). */
+/**
+ * Build a taskId→Board map from a pre-fetched boards array (no extra IO).
+ * Throws on duplicate task ids — batch ops resolve every task through this map,
+ * and a silent "last one wins" here would patch or report the wrong record.
+ */
 function buildTaskBoardMap(allBoards: Board[]): Map<string, Board> {
   const m = new Map<string, Board>();
-  for (const b of allBoards) for (const t of b.tasks) m.set(t.id, b);
+  for (const b of allBoards) {
+    for (const t of b.tasks) {
+      const prev = m.get(t.id);
+      if (prev) {
+        const where = prev.id === b.id ? `twice on board ${b.id}` : `on boards ${prev.id} and ${b.id}`;
+        throw new Error(
+          `duplicate task id "${t.id}" (${where}) — repair the board YAML before running batch operations`,
+        );
+      }
+      m.set(t.id, b);
+    }
+  }
   return m;
 }
 
