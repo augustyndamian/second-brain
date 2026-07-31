@@ -302,6 +302,31 @@ export interface EditTaskInput {
   boardId?: string;
 }
 
+/**
+ * Anchor bookkeeping after a plannedDate edit — mirror of today()'s self-heal
+ * rule: the task belongs in today's view when plannedDate <= session date, or
+ * (plannedDate=null and column=doing). Self-heal only ever ADDS anchors, so
+ * clearing or moving the date must de-anchor here or the task stays in the view.
+ */
+async function syncAnchorAfterPlannedEdit(root: string, task: Task): Promise<void> {
+  const active = await readActive(root);
+  if (!active || active.status !== "open") return;
+  const belongsToday =
+    task.plannedDate !== null ? task.plannedDate <= active.date : task.column === "doing";
+  const isAnchored = active.anchoredTaskIds.includes(task.id);
+  if (belongsToday && !isAnchored) {
+    await writeActive(root, {
+      ...active,
+      anchoredTaskIds: [...active.anchoredTaskIds, task.id],
+    });
+  } else if (!belongsToday && isAnchored) {
+    await writeActive(root, {
+      ...active,
+      anchoredTaskIds: active.anchoredTaskIds.filter((id) => id !== task.id),
+    });
+  }
+}
+
 export async function editTask(root: string, taskId: string, input: EditTaskInput): Promise<TaskWithBoard> {
   if (input.area) await assertValidArea(root, input.area);
   const cur = await findTaskBoard(root, taskId);
@@ -380,6 +405,7 @@ export async function editTask(root: string, taskId: string, input: EditTaskInpu
       boardId: cur.id,
       changes,
     });
+    if (changes.plannedDate) await syncAnchorAfterPlannedEdit(root, next);
     return { task: next, board: updated };
   }
 
@@ -393,6 +419,7 @@ export async function editTask(root: string, taskId: string, input: EditTaskInpu
     boardId: targetBoardId,
     changes,
   });
+  if (changes.plannedDate) await syncAnchorAfterPlannedEdit(root, next);
   return { task: next, board: updated };
 }
 
@@ -816,6 +843,9 @@ export async function editTasksBatch(
     const changes = perItemChanges[i]!;
     if (Object.keys(changes).length > 0) {
       await appendEvent(root, { ts, type: "task.edited", taskId: task.id, boardId: board.id, changes, batchId });
+      if (changes.plannedDate) {
+        await syncAnchorAfterPlannedEdit(root, boardUpdates.get(board.id)!.patches.get(task.id)!);
+      }
     }
     results.push({ id: task.id, boardId: board.id, changes });
   }
