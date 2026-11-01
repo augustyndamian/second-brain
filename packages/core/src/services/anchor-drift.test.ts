@@ -6,7 +6,7 @@ import { initStorage } from "../storage/init.js";
 import { writeAreas } from "../storage/areas.js";
 import { readActive, writeActive } from "../storage/active-session.js";
 import { localToday } from "../schedule/dates.js";
-import { createTask, rescheduleTask, rescheduleTasksBatch } from "./tasks.js";
+import { createTask, editTask, editTasksBatch, rescheduleTask, rescheduleTasksBatch } from "./tasks.js";
 import { ensureSession } from "./session.js";
 import { today } from "../queries/today.js";
 
@@ -85,6 +85,107 @@ describe("rescheduleTasksBatch anchor bookkeeping", () => {
     const view = await today(root);
     expect(view.tasks.map((t) => t.id)).toContain(a.task.id);
     expect(view.tasks.map((t) => t.id)).not.toContain(b.task.id);
+  });
+});
+
+// Regression: `kb task edit <id> --planned null` cleared the date but left the
+// task in anchoredTaskIds, so it stayed visible in today() forever (self-heal
+// only ADDS anchors, it never removes them).
+
+describe("editTask anchor bookkeeping", () => {
+  it("clearing plannedDate on an anchored todo task de-anchors and removes it from today()", async () => {
+    const date = localToday();
+    const { task } = await createTask(root, { area: "work", title: "t", plannedDate: date });
+    await ensureSession(root);
+    expect(await anchoredIds()).toContain(task.id);
+
+    await editTask(root, task.id, { plannedDate: null });
+    expect(await anchoredIds()).not.toContain(task.id);
+
+    const view = await today(root);
+    expect(view.tasks.map((t) => t.id)).not.toContain(task.id);
+    expect(view.overdue.map((t) => t.id)).not.toContain(task.id);
+  });
+
+  it("clearing plannedDate on a doing task keeps the anchor (parity with self-heal)", async () => {
+    await ensureSession(root);
+    const date = localToday();
+    const { task } = await createTask(root, {
+      area: "work",
+      title: "t",
+      plannedDate: date,
+      column: "doing",
+    });
+    expect(await anchoredIds()).toContain(task.id);
+
+    await editTask(root, task.id, { plannedDate: null });
+    expect(await anchoredIds()).toContain(task.id);
+
+    const view = await today(root);
+    expect(view.tasks.map((t) => t.id)).toContain(task.id);
+  });
+
+  it("edit plannedDate to the session date anchors a previously un-anchored task", async () => {
+    await ensureSession(root);
+    const date = localToday();
+    const { task } = await createTask(root, { area: "work", title: "t", plannedDate: tomorrow() });
+    expect(await anchoredIds()).not.toContain(task.id);
+
+    await editTask(root, task.id, { plannedDate: date });
+    expect(await anchoredIds()).toContain(task.id);
+
+    const view = await today(root);
+    expect(view.tasks.map((t) => t.id)).toContain(task.id);
+  });
+
+  it("edit plannedDate to tomorrow de-anchors", async () => {
+    const date = localToday();
+    const { task } = await createTask(root, { area: "work", title: "t", plannedDate: date });
+    await ensureSession(root);
+    expect(await anchoredIds()).toContain(task.id);
+
+    await editTask(root, task.id, { plannedDate: tomorrow() });
+    expect(await anchoredIds()).not.toContain(task.id);
+
+    const view = await today(root);
+    expect(view.tasks.map((t) => t.id)).not.toContain(task.id);
+  });
+});
+
+describe("editTasksBatch anchor bookkeeping", () => {
+  it("mixed batch: null-on-todo de-anchors, null-on-doing keeps, session-date anchors", async () => {
+    const date = localToday();
+    const a = await createTask(root, { area: "work", title: "a", plannedDate: date });
+    await ensureSession(root);
+    const b = await createTask(root, {
+      area: "work",
+      title: "b",
+      plannedDate: date,
+      column: "doing",
+    });
+    const c = await createTask(root, { area: "work", title: "c", plannedDate: tomorrow() });
+
+    let ids = await anchoredIds();
+    expect(ids).toContain(a.task.id);
+    expect(ids).toContain(b.task.id);
+    expect(ids).not.toContain(c.task.id);
+
+    await editTasksBatch(root, [
+      { id: a.task.id, plannedDate: null },
+      { id: b.task.id, plannedDate: null },
+      { id: c.task.id, plannedDate: date },
+    ]);
+
+    ids = await anchoredIds();
+    expect(ids).not.toContain(a.task.id);
+    expect(ids).toContain(b.task.id);
+    expect(ids).toContain(c.task.id);
+
+    const view = await today(root);
+    const viewIds = view.tasks.map((t) => t.id);
+    expect(viewIds).not.toContain(a.task.id);
+    expect(viewIds).toContain(b.task.id);
+    expect(viewIds).toContain(c.task.id);
   });
 });
 

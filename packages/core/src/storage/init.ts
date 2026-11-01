@@ -84,6 +84,15 @@ export async function initStorage(root: string, opts: InitOpts = {}): Promise<vo
 
   for (const area of areas) {
     const id = `b_${area.id}_main`;
+    // Never clobber a board file that already exists: isInitialized() only
+    // checks meta.yaml, so a lost meta with surviving boards would otherwise
+    // get its boards overwritten with empty ones here.
+    try {
+      await fs.access(path.join(p.boards, `${id}.yaml`));
+      continue;
+    } catch {
+      // board missing — create it below
+    }
     const board: Board = {
       id,
       area: area.id,
